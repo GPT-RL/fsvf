@@ -51,8 +51,12 @@ def generator():
         # Create a dictionary mapping the feature name to the tf.train.Example-compatible
         # data type.
         feature = {
-            "feature0": _int64_feature(feature0),
-            "feature1": _int64_feature(feature1),
+            "feature0": tf.train.Feature(
+                int64_list=tf.train.Int64List(value=[feature0])
+            ),
+            "feature1": tf.train.Feature(
+                int64_list=tf.train.Int64List(value=[feature1])
+            ),
             "feature2": _bytes_feature(feature2),
             "feature3": _float_feature(feature3),
         }
