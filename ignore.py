@@ -32,14 +32,6 @@ def generator():
         Creates a tf.train.Example message ready to be written to a file.
         """
 
-        def _bytes_feature(value):
-            """Returns a bytes_list from a string / byte."""
-            if isinstance(value, type(tf.constant(0))):
-                value = (
-                    value.numpy()
-                )  # BytesList won't unpack a string from an EagerTensor.
-            return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
-
         # Create a dictionary mapping the feature name to the tf.train.Example-compatible
         # data type.
         feature = {
@@ -49,7 +41,9 @@ def generator():
             "feature1": tf.train.Feature(
                 int64_list=tf.train.Int64List(value=[feature1])
             ),
-            "feature2": _bytes_feature(feature2),
+            "feature2": tf.train.Feature(
+                bytes_list=tf.train.BytesList(value=[feature2.numpy()])
+            ),
             "feature3": tf.train.Feature(
                 float_list=tf.train.FloatList(value=[feature3])
             ),
