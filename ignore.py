@@ -18,24 +18,26 @@ def generator():
     features_dataset = tf.data.Dataset.from_tensor_slices(
         (
             np.random.choice([False, True], n),
-            f1,
+            # f1,
             strings[f1],
-            np.random.randn(n),
+            # np.random.randn(n),
         )
     )
-    for f0, f1, f2, f3 in features_dataset:
+    for term, obs in features_dataset:
         """
         Creates a tf.train.Example message ready to be written to a file.
         """
         yield tf.train.Example(
             features=tf.train.Features(
                 feature={
-                    "f0": tf.train.Feature(int64_list=tf.train.Int64List(value=[f0])),
-                    "f1": tf.train.Feature(int64_list=tf.train.Int64List(value=[f1])),
-                    "f2": tf.train.Feature(
-                        bytes_list=tf.train.BytesList(value=[f2.numpy()])
+                    "term": tf.train.Feature(
+                        int64_list=tf.train.Int64List(value=[term])
                     ),
-                    "f3": tf.train.Feature(float_list=tf.train.FloatList(value=[f3])),
+                    # "f1": tf.train.Feature(int64_list=tf.train.Int64List(value=[f1])),
+                    "obs": tf.train.Feature(
+                        bytes_list=tf.train.BytesList(value=[obs.numpy()])
+                    ),
+                    # "f3": tf.train.Feature(float_list=tf.train.FloatList(value=[f3])),
                 }
             )
         ).SerializeToString()
@@ -45,4 +47,12 @@ filename = "test.tfrecord"
 writer = tf.data.experimental.TFRecordWriter(filename)
 writer.write(
     tf.data.Dataset.from_generator(generator, output_types=tf.string, output_shapes=())
+)
+example_ds = tf.data.TFRecordDataset(filenames=filename, compression_type="GZIP")
+FEATURE_DESCRIPTION = {
+    "term": tf.io.FixedLenFeature([], tf.int64),
+    "obs": tf.io.FixedLenSequenceFeature([], tf.string, allow_missing=True),
+}
+episode_ds = example_ds.map(
+    lambda x: tf.io.parse_single_example(x, FEATURE_DESCRIPTION)
 )
