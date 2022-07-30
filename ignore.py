@@ -5,23 +5,6 @@ import numpy as np
 # with tf.train.Example.
 
 
-def _bytes_feature(value):
-    """Returns a bytes_list from a string / byte."""
-    if isinstance(value, type(tf.constant(0))):
-        value = value.numpy()  # BytesList won't unpack a string from an EagerTensor.
-    return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
-
-
-def _float_feature(value):
-    """Returns a float_list from a float / double."""
-    return tf.train.Feature(float_list=tf.train.FloatList(value=[value]))
-
-
-def _int64_feature(value):
-    """Returns an int64_list from a bool / enum / int / uint."""
-    return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
-
-
 # The number of observations in the dataset.
 n_observations = int(1e4)
 
@@ -48,6 +31,15 @@ def generator():
         """
         Creates a tf.train.Example message ready to be written to a file.
         """
+
+        def _bytes_feature(value):
+            """Returns a bytes_list from a string / byte."""
+            if isinstance(value, type(tf.constant(0))):
+                value = (
+                    value.numpy()
+                )  # BytesList won't unpack a string from an EagerTensor.
+            return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
+
         # Create a dictionary mapping the feature name to the tf.train.Example-compatible
         # data type.
         feature = {
@@ -58,7 +50,9 @@ def generator():
                 int64_list=tf.train.Int64List(value=[feature1])
             ),
             "feature2": _bytes_feature(feature2),
-            "feature3": _float_feature(feature3),
+            "feature3": tf.train.Feature(
+                float_list=tf.train.FloatList(value=[feature3])
+            ),
         }
 
         # Create a Features message using tf.train.Example.
