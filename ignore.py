@@ -22,25 +22,6 @@ def _int64_feature(value):
     return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
 
 
-def serialize_example(feature0, feature1, feature2, feature3):
-    """
-    Creates a tf.train.Example message ready to be written to a file.
-    """
-    # Create a dictionary mapping the feature name to the tf.train.Example-compatible
-    # data type.
-    feature = {
-        "feature0": _int64_feature(feature0),
-        "feature1": _int64_feature(feature1),
-        "feature2": _bytes_feature(feature2),
-        "feature3": _float_feature(feature3),
-    }
-
-    # Create a Features message using tf.train.Example.
-
-    example_proto = tf.train.Example(features=tf.train.Features(feature=feature))
-    return example_proto.SerializeToString()
-
-
 # The number of observations in the dataset.
 n_observations = int(1e4)
 
