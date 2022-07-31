@@ -17,6 +17,7 @@
 
 import math
 import os
+import time
 from pathlib import Path
 from typing import Any, Dict, Generator, List, Tuple
 
@@ -200,11 +201,18 @@ def generate_examples_one_file(
     episode_ds = example_ds.map(
         tf_example_to_step_ds, num_parallel_calls=tf.data.experimental.AUTOTUNE
     )
+    dataset = episode_ds.flat_map(tf.data.Dataset.from_tensor_slices)
+    # episode_id = min(ep["episode_id"] for ep in episodes)
+    # record_id = f"{checkpoint_id}_{episode_id}"
+    tick = time.time()
+    for x in tfds.as_numpy(dataset.shuffle(int(1e4)).batch(32)):
+        elapsed = time.time() - tick
+        assert False, elapsed
 
-    # [2.47453145, 2.49952671, 2.52477446, 2.55027723, 2.57603761,
-    # 2.60205819, 2.6283416 , 2.65489051, 2.68170759, 2.70879554]
-    # for x in tfds.as_numpy(episode_ds.flat_map(tf.data.Dataset.from_tensor_slices)):
-    # obs = tf.io.decode_image(x["observations"])
+    for x in dataset:
+        length += 1
+        obs = tf.io.decode_image(x["observations"])
+        assert False
     episode_ds = iter(tfds.as_numpy(episode_ds))
     while True:
 
