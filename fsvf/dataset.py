@@ -121,7 +121,7 @@ def get_files(prefix: str, num_shards: int) -> List[str]:
     ]  # pytype: disable=bad-return-type  # gen-stub-imports
 
 
-def tf_example_to_step_ds(tf_example: tf.train.Example) -> Tuple[Dict[str, Any], int]:
+def tf_example_to_step_ds(tf_example: tf.train.Example) -> Dict[str, Any]:
     """Generates an RLDS episode from an Atari TF Example.
     Args:
       tf_example: example from an Atari dataset.
@@ -136,20 +136,53 @@ def tf_example_to_step_ds(tf_example: tf.train.Example) -> Tuple[Dict[str, Any],
     is_last = tf.concat([[False] * tf.ones(episode_length - 1), [True]], axis=0)
 
     is_terminal = [False] * tf.ones_like(data["actions"])
-    discounts = data["discounts"]
-    if discounts[-1] == 0.0:
+    _discounts = data["discounts"]
+    if _discounts[-1] == 0.0:
         is_terminal = tf.concat(
             [[False] * tf.ones(episode_length - 1, tf.int64), [True]], axis=0
         )
         # If the episode ends in a terminal state, in the last step only the
         # observation has valid information (the terminal state).
-        discounts = tf.concat([discounts[1:], [0.0]], axis=0)
+        _discounts = tf.concat([_discounts[1:], [0.0]], axis=0)
 
-    def broadcast_idxs(checkpoint_idx, episode_idx, **data):
+    rewards = data["unclipped_rewards"]
+    n1 = tf.cast(tf.math.ceil(episode_length / 2) - 1, tf.int32)
+    n2 = episode_length // 2
+    p1, p2 = tf.meshgrid(
+        tf.range(-n1, episode_length - n1),
+        tf.range(-n2, episode_length - n2),
+    )
+    powers = p1 + p2
+    # powers = np.flip(powers, axis=0)
+    powers = tf.reverse(powers, axis=[0])
+    """
+    powers:
+    [  0  1  2 ... ]
+    [ -1  0  1 ... ]
+    [ -2 -1  0 ... ]
+    ...
+    """
+    discounts = DISCOUNT ** tf.cast(powers, tf.float32)
+    discounts = discounts * tf.cast(powers >= 0, tf.float32)
+    """
+    dicsounts:
+    [  1.00  0.99  0.98 ... ]
+    [  0.00  1.00  0.99 ... ]
+    [  0.00  0.00  1.00 ... ]
+    ...
+    """
+    rewards = tf.expand_dims(rewards, 0)
+    return_to_go = tf.reduce_sum(rewards * discounts, axis=1)
+
+    def broadcast_idxs(
+        checkpoint_idx, episode_idx, discounts, **data
+    ) -> Dict[str, Any]:
         return dict(
             **data,
             checkpoint_idx=[checkpoint_idx] * tf.ones(episode_length),
+            discounts=_discounts,
             episode_idx=[episode_idx] * tf.ones(episode_length),
+            return_to_go=return_to_go,
         )
 
     return broadcast_idxs(
@@ -172,7 +205,6 @@ def generate_examples_one_file(
     # 2.60205819, 2.6283416 , 2.65489051, 2.68170759, 2.70879554]
     # for x in tfds.as_numpy(episode_ds.flat_map(tf.data.Dataset.from_tensor_slices)):
     # obs = tf.io.decode_image(x["observations"])
-    # assert False
     episode_ds = iter(tfds.as_numpy(episode_ds))
     while True:
 
@@ -206,8 +238,8 @@ def generate_examples_one_file(
             assert np.all(discounts[-1, :-1] == 0)
             rewards = np.expand_dims(rewards, 0)
             return_to_go = np.sum(rewards * discounts, axis=1)
-            ep["return_to_go"] = return_to_go
             assert False
+            ep["return_to_go"] = return_to_go
         episodes = []
         yield record_id, dict(checkpoint_id=checkpoint_id, episodes=episodes)
 
