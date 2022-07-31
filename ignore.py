@@ -71,7 +71,8 @@ episode_ds = example_ds.map(
 )
 
 
-for x in tfds.as_numpy(episode_ds):
+for x in episode_ds:
+    breakpoint()
     [term] = x["term"]
     print(tf.io.parse_tensor(term, tf.bool))
     [obs] = x["obs"]

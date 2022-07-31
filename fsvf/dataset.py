@@ -43,19 +43,20 @@ DISCOUNT = 0.99
 
 # Note that rewards and episode_return are actually also clipped.
 FEATURE_DESCRIPTION = {
-    "checkpoint_idx": tf.io.FixedLenFeature([], tf.int64),
-    "episode_idx": tf.io.FixedLenFeature([], tf.int64),
-    "episode_return": tf.io.FixedLenFeature([], tf.float32),
-    "clipped_episode_return": tf.io.FixedLenFeature([], tf.float32),
-    "observations": tf.io.FixedLenSequenceFeature([], tf.string, allow_missing=True),
     "actions": tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True),
+    # "checkpoint_idx": tf.io.FixedLenFeature([], tf.int64),
+    # "episode_idx": tf.io.FixedLenFeature([], tf.int64),
+    # "episode_return": tf.io.FixedLenFeature([], tf.float32),
+    # # "clipped_episode_return": tf.io.FixedLenFeature([], tf.float32),
+    # "observations": tf.io.FixedLenSequenceFeature([], tf.string, allow_missing=True),
+    # "actions": tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True),
     "unclipped_rewards": tf.io.FixedLenSequenceFeature(
         [], tf.float32, allow_missing=True
     ),
-    "clipped_rewards": tf.io.FixedLenSequenceFeature(
-        [], tf.float32, allow_missing=True
-    ),
-    "discounts": tf.io.FixedLenSequenceFeature([], tf.float32, allow_missing=True),
+    # "clipped_rewards": tf.io.FixedLenSequenceFeature(
+    # [], tf.float32, allow_missing=True
+    # ),
+    # "discounts": tf.io.FixedLenSequenceFeature([], tf.float32, allow_missing=True),
 }
 FEATURES_DICT = tfds.features.FeaturesDict(
     dict(
@@ -129,6 +130,7 @@ def tf_example_to_step_ds(tf_example: tf.train.Example) -> Tuple[Dict[str, Any],
       RLDS episode.
     """
 
+    return tf.io.parse_single_example(tf_example, FEATURE_DESCRIPTION)
     data = tf.io.parse_single_example(tf_example, FEATURE_DESCRIPTION)
     episode_length = tf.size(data["actions"])
     is_first = tf.concat([[True], [False] * tf.ones(episode_length - 1)], axis=0)
@@ -171,6 +173,9 @@ def generate_examples_one_file(
     episode_ds = example_ds.map(
         tf_example_to_step_ds, num_parallel_calls=tf.data.experimental.AUTOTUNE
     )
+
+    for x in tfds.as_numpy(episode_ds.flat_map(tf.data.Dataset.from_tensor_slices)):
+        assert False
     episode_ds = iter(tfds.as_numpy(episode_ds))
     while True:
         try:
