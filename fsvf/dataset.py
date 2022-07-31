@@ -25,6 +25,7 @@ import numpy as np
 import tensorflow as tf
 import tensorflow_datasets.public_api as tfds
 from tensorflow_datasets.rl_unplugged import atari_utils
+from dataclasses import asdict, dataclass
 
 _DESCRIPTION = """
 RL Unplugged is suite of benchmarks for offline reinforcement learning. The RL
@@ -42,64 +43,82 @@ EPISODES_PER = 8
 DISCOUNT = 0.99
 
 
+@dataclass
+class InitialFeatures:
+    actions: Any
+    checkpoint_idx: Any
+    clipped_rewards: Any
+    discounts: Any
+    episode_idx: Any
+    # episode_return: Any
+    # clipped_episode_return: Any
+    observations: Any
+    unclipped_rewards: Any
+
+
+@dataclass
+class Features(InitialFeatures):
+    is_first: Any
+    is_last: Any
+    is_terminal: Any
+    return_to_go: Any
+    time_step: Any
+
+
 # Note that rewards and episode_return are actually also clipped.
-FEATURE_DESCRIPTION = {
-    "actions": tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True),
-    "checkpoint_idx": tf.io.FixedLenFeature([], tf.int64),
-    "episode_idx": tf.io.FixedLenFeature([], tf.int64),
-    # "episode_return": tf.io.FixedLenFeature([], tf.float32),
-    # "clipped_episode_return": tf.io.FixedLenFeature([], tf.float32),
-    "observations": tf.io.FixedLenSequenceFeature([], tf.string, allow_missing=True),
-    "unclipped_rewards": tf.io.FixedLenSequenceFeature(
-        [], tf.float32, allow_missing=True
-    ),
-    "clipped_rewards": tf.io.FixedLenSequenceFeature(
-        [], tf.float32, allow_missing=True
-    ),
-    "discounts": tf.io.FixedLenSequenceFeature([], tf.float32, allow_missing=True),
-}
-FEATURES_DICT = tfds.features.FeaturesDict(
+FEATURE_DESCRIPTION = InitialFeatures(
+    actions=tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True),
+    checkpoint_idx=tf.io.FixedLenFeature([], tf.int64),
+    clipped_rewards=tf.io.FixedLenSequenceFeature([], tf.float32, allow_missing=True),
+    discounts=tf.io.FixedLenSequenceFeature([], tf.float32, allow_missing=True),
+    episode_idx=tf.io.FixedLenFeature([], tf.int64),
+    observations=tf.io.FixedLenSequenceFeature([], tf.string, allow_missing=True),
+    unclipped_rewards=tf.io.FixedLenSequenceFeature([], tf.float32, allow_missing=True),
+)
+
+
+FEATURES_DICT = tfds.features.FeaturesDict(  # TODO!
+    # dict(
+    # checkpoint_id=tf.int64,
+    # episodes=tfds.features.Dataset(
+    #     dict(
+    #         steps=tfds.features.Dataset(
+    #             dict(
     dict(
-        checkpoint_id=tf.int64,
-        episodes=tfds.features.Dataset(
-            dict(
-                steps=tfds.features.Dataset(
-                    dict(
-                        observation=tfds.features.Image(
-                            shape=(
-                                84,
-                                84,
-                                1,
-                            ),
-                            dtype=tf.uint8,
-                            encoding_format="png",
-                        ),
-                        action=tf.int64,
-                        return_to_go=tfds.features.Scalar(
-                            dtype=tf.float32,
-                            doc=tfds.features.Documentation(
-                                desc="Discounted sum of future rewards."
-                            ),
-                        ),
-                        reward=tfds.features.Scalar(
-                            dtype=tf.float32,
-                            doc=tfds.features.Documentation(
-                                desc="Clipped reward.", value_range="[-1, 1]"
-                            ),
-                        ),
-                        is_terminal=tf.bool,
-                        is_first=tf.bool,
-                        is_last=tf.bool,
-                    )
-                ),
-                episode_id=tf.int64,
-                episode_return=tfds.features.Scalar(
-                    dtype=tf.float32,
-                    doc=tfds.features.Documentation(desc="Sum of the clipped rewards."),
-                ),
-            )
+        # Features(
+        observations=tfds.features.Image(
+            shape=(
+                84,
+                84,
+                1,
+            ),
+            dtype=tf.uint8,
+            encoding_format="png",
         ),
+        actions=tf.int64,
+        return_to_go=tfds.features.Scalar(
+            dtype=tf.float32,
+            doc=tfds.features.Documentation(desc="Discounted sum of future rewards."),
+        ),
+        rewards=tfds.features.Scalar(
+            dtype=tf.float32,
+            doc=tfds.features.Documentation(
+                desc="Clipped reward.", value_range="[-1, 1]"
+            ),
+        ),
+        is_terminals=tf.bool,
+        is_first=tf.bool,
+        is_last=tf.bool,
+        # )
     )
+    # ),
+    #         episode_id=tf.int64,
+    #         episode_return=tfds.features.Scalar(
+    #             dtype=tf.float32,
+    #             doc=tfds.features.Documentation(desc="Sum of the clipped rewards."),
+    #          ),
+    #     )
+    # ),
 )
 
 
@@ -130,13 +149,9 @@ def tf_example_to_step_ds(tf_example: tf.train.Example) -> Dict[str, Any]:
       RLDS episode.
     """
 
-    # return tf.io.parse_single_example(tf_example, FEATURE_DESCRIPTION)
-    data = tf.io.parse_single_example(tf_example, FEATURE_DESCRIPTION)
+    data = tf.io.parse_single_example(tf_example, asdict(FEATURE_DESCRIPTION))
     episode_length = tf.size(data["actions"])
-    is_first = tf.concat([[True], [False] * tf.ones(episode_length - 1)], axis=0)
-    is_last = tf.concat([[False] * tf.ones(episode_length - 1), [True]], axis=0)
 
-    is_terminal = [False] * tf.ones_like(data["actions"])
     _discounts = data["discounts"]
     if _discounts[-1] == 0.0:
         is_terminal = tf.concat(
@@ -145,6 +160,10 @@ def tf_example_to_step_ds(tf_example: tf.train.Example) -> Dict[str, Any]:
         # If the episode ends in a terminal state, in the last step only the
         # observation has valid information (the terminal state).
         _discounts = tf.concat([_discounts[1:], [0.0]], axis=0)
+    is_first = tf.concat([[True], [False] * tf.ones(episode_length - 1)], axis=0)
+    is_last = tf.concat([[False] * tf.ones(episode_length - 1), [True]], axis=0)
+    is_terminal = [False] * tf.ones_like(data["actions"])
+    time_step = tf.range(episode_length)
 
     rewards = data["unclipped_rewards"]
     n1 = tf.cast(tf.math.ceil(episode_length / 2) - 1, tf.int32)
@@ -175,6 +194,7 @@ def tf_example_to_step_ds(tf_example: tf.train.Example) -> Dict[str, Any]:
     rewards = tf.expand_dims(rewards, 0)
     return_to_go = tf.reduce_sum(rewards * discounts, axis=1)
 
+    # noinspection PyUnusedLocal
     def broadcast_idxs(
         checkpoint_idx, episode_idx, discounts, **data
     ) -> Dict[str, Any]:
@@ -187,7 +207,11 @@ def tf_example_to_step_ds(tf_example: tf.train.Example) -> Dict[str, Any]:
         )
 
     return broadcast_idxs(
-        **data, is_first=is_first, is_last=is_last, is_terminal=is_terminal
+        **data,
+        is_first=is_first,
+        is_last=is_last,
+        is_terminal=is_terminal,
+        time_step=time_step,
     )
 
 
@@ -202,54 +226,16 @@ def generate_examples_one_file(
         tf_example_to_step_ds, num_parallel_calls=tf.data.experimental.AUTOTUNE
     )
     dataset = episode_ds.flat_map(tf.data.Dataset.from_tensor_slices)
-    # episode_id = min(ep["episode_id"] for ep in episodes)
-    # record_id = f"{checkpoint_id}_{episode_id}"
-    tick = time.time()
-    for x in tfds.as_numpy(dataset.shuffle(int(1e4)).batch(32)):
-        elapsed = time.time() - tick
-        assert False, elapsed
 
-    for x in dataset:
-        length += 1
-        obs = tf.io.decode_image(x["observations"])
+    for sequence_dict in tfds.as_numpy(dataset.shuffle(int(1e4)).batch(32)):
+        sequence = Features(**sequence_dict)
         assert False
-    episode_ds = iter(tfds.as_numpy(episode_ds))
-    while True:
-
-        # [checkpoint_id] = set(file_checkpoint_ids)
-        # episode_id = min(ep["episode_id"] for ep in episodes)
-        # record_id = f"{checkpoint_id}_{episode_id}"
-        for ep in episode_ds:
-            rewards = ep["unclipped_rewards"]
-            n1 = math.ceil(len(rewards) / 2) - 1
-            n2 = len(rewards) // 2
-            powers = np.mgrid[-n1 : len(rewards) - n1, -n2 : len(rewards) - n2]
-            powers = powers.sum(0)
-            powers = np.flip(powers, axis=0)
-            """
-            powers:
-            [  0  1  2 ... ]
-            [ -1  0  1 ... ]
-            [ -2 -1  0 ... ]
-            ...
-            """
-            discounts = DISCOUNT**powers
-            discounts = discounts * (powers >= 0)
-            """
-            dicsounts:
-            [  1.00  0.99  0.98 ... ]
-            [  0.00  1.00  0.99 ... ]
-            [  0.00  0.00  1.00 ... ]
-            ...
-            """
-            assert discounts[-1, -1] == 1
-            assert np.all(discounts[-1, :-1] == 0)
-            rewards = np.expand_dims(rewards, 0)
-            return_to_go = np.sum(rewards * discounts, axis=1)
+        episode_idx = "_".join(set(sequence.episode_idx))
+        checkpoint_idx = "_".join(set(sequence.checkpoint_idx))
+        record_id = f"{checkpoint_idx}_{episode_idx}"
+        if "_" in episode_idx or "_" in checkpoint_idx:
             assert False
-            ep["return_to_go"] = return_to_go
-        episodes = []
-        yield record_id, dict(checkpoint_id=checkpoint_id, episodes=episodes)
+        yield record_id, asdict(sequence)
 
 
 class MyRLU(tfds.core.GeneratorBasedBuilder):
