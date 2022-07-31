@@ -44,8 +44,8 @@ DISCOUNT = 0.99
 # Note that rewards and episode_return are actually also clipped.
 FEATURE_DESCRIPTION = {
     "actions": tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True),
-    # "checkpoint_idx": tf.io.FixedLenFeature([], tf.int64),
-    # "episode_idx": tf.io.FixedLenFeature([], tf.int64),
+    "checkpoint_idx": tf.io.FixedLenFeature([], tf.int64),
+    "episode_idx": tf.io.FixedLenFeature([], tf.int64),
     # "episode_return": tf.io.FixedLenFeature([], tf.float32),
     # "clipped_episode_return": tf.io.FixedLenFeature([], tf.float32),
     "observations": tf.io.FixedLenSequenceFeature([], tf.string, allow_missing=True),
@@ -129,7 +129,7 @@ def tf_example_to_step_ds(tf_example: tf.train.Example) -> Tuple[Dict[str, Any],
       RLDS episode.
     """
 
-    return tf.io.parse_single_example(tf_example, FEATURE_DESCRIPTION)
+    # return tf.io.parse_single_example(tf_example, FEATURE_DESCRIPTION)
     data = tf.io.parse_single_example(tf_example, FEATURE_DESCRIPTION)
     episode_length = tf.size(data["actions"])
     is_first = tf.concat([[True], [False] * tf.ones(episode_length - 1)], axis=0)
@@ -144,22 +144,17 @@ def tf_example_to_step_ds(tf_example: tf.train.Example) -> Tuple[Dict[str, Any],
         # If the episode ends in a terminal state, in the last step only the
         # observation has valid information (the terminal state).
         discounts = tf.concat([discounts[1:], [0.0]], axis=0)
-    episode = {
-        # Episode Metadata
-        "episode_id": data["episode_idx"],
-        # "checkpoint_id": data["checkpoint_idx"],
-        "episode_return": data["episode_return"],
-        "steps": {
-            "observation": data["observations"],
-            "action": data["actions"],
-            "reward": data["unclipped_rewards"],
-            # "discount": discounts,
-            "is_first": is_first,
-            "is_last": is_last,
-            "is_terminal": is_terminal,
-        },
-    }
-    return episode, data["checkpoint_idx"]
+
+    def broadcast_idxs(checkpoint_idx, episode_idx, **data):
+        return dict(
+            **data,
+            checkpoint_idx=[checkpoint_idx] * tf.ones(episode_length),
+            episode_idx=[episode_idx] * tf.ones(episode_length),
+        )
+
+    return broadcast_idxs(
+        **data, is_first=is_first, is_last=is_last, is_terminal=is_terminal
+    )
 
 
 def generate_examples_one_file(
@@ -173,22 +168,19 @@ def generate_examples_one_file(
         tf_example_to_step_ds, num_parallel_calls=tf.data.experimental.AUTOTUNE
     )
 
-    for x in tfds.as_numpy(episode_ds.flat_map(tf.data.Dataset.from_tensor_slices)):
-        obs = tf.io.decode_image(x["observations"])
-        assert False
+    # [2.47453145, 2.49952671, 2.52477446, 2.55027723, 2.57603761,
+    # 2.60205819, 2.6283416 , 2.65489051, 2.68170759, 2.70879554]
+    # for x in tfds.as_numpy(episode_ds.flat_map(tf.data.Dataset.from_tensor_slices)):
+    # obs = tf.io.decode_image(x["observations"])
+    # assert False
     episode_ds = iter(tfds.as_numpy(episode_ds))
     while True:
-        try:
-            chunk = [next(episode_ds) for _ in range(EPISODES_PER)]
-        except StopIteration:
-            return
 
-        episodes, file_checkpoint_ids = zip(*chunk)
-        [checkpoint_id] = set(file_checkpoint_ids)
-        episode_id = min(ep["episode_id"] for ep in episodes)
-        record_id = f"{checkpoint_id}_{episode_id}"
-        for ep in episodes:
-            rewards = ep["steps"]["reward"]
+        # [checkpoint_id] = set(file_checkpoint_ids)
+        # episode_id = min(ep["episode_id"] for ep in episodes)
+        # record_id = f"{checkpoint_id}_{episode_id}"
+        for ep in episode_ds:
+            rewards = ep["unclipped_rewards"]
             n1 = math.ceil(len(rewards) / 2) - 1
             n2 = len(rewards) // 2
             powers = np.mgrid[-n1 : len(rewards) - n1, -n2 : len(rewards) - n2]
@@ -214,7 +206,8 @@ def generate_examples_one_file(
             assert np.all(discounts[-1, :-1] == 0)
             rewards = np.expand_dims(rewards, 0)
             return_to_go = np.sum(rewards * discounts, axis=1)
-            ep["steps"]["return_to_go"] = return_to_go
+            ep["return_to_go"] = return_to_go
+            assert False
         episodes = []
         yield record_id, dict(checkpoint_id=checkpoint_id, episodes=episodes)
 
