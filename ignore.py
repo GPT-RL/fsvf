@@ -1,4 +1,5 @@
 import tensorflow as tf
+import tensorflow_datasets as tfds
 import numpy as np
 
 # The following functions can be used to convert a value to a type compatible
@@ -48,11 +49,17 @@ writer = tf.data.experimental.TFRecordWriter(filename)
 writer.write(
     tf.data.Dataset.from_generator(generator, output_types=tf.string, output_shapes=())
 )
-example_ds = tf.data.TFRecordDataset(filenames=filename, compression_type="GZIP")
+example_ds = tf.data.TFRecordDataset(filenames=filename)  # , compression_type="GZIP")
 FEATURE_DESCRIPTION = {
     "term": tf.io.FixedLenFeature([], tf.int64),
     "obs": tf.io.FixedLenSequenceFeature([], tf.string, allow_missing=True),
 }
-episode_ds = example_ds.map(
-    lambda x: tf.io.parse_single_example(x, FEATURE_DESCRIPTION)
-)
+
+
+def parse(x):
+    return tf.io.parse_single_example(x, FEATURE_DESCRIPTION)
+
+
+episode_ds = example_ds.map(parse)
+for x in tfds.as_numpy(episode_ds):
+    print(x)
