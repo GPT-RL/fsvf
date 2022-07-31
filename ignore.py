@@ -5,23 +5,27 @@ import numpy as np
 # The following functions can be used to convert a value to a type compatible
 # with tf.train.Example.
 
+t = tf.constant([1, 2, 3])
+s = tf.io.serialize_tensor(t)
+
 
 def generator():
     # The number of observations in the dataset.
     n = 4
+    d = 2
 
     # Integer feature, random from 0 to 4.
-    f1 = np.random.randint(0, 5, n)
+    f1 = np.random.randint(0, 5, size=(n, d))
 
     # String feature.
     strings = np.array([b"cat", b"dog", b"chicken", b"horse", b"goat"])
 
     features_dataset = tf.data.Dataset.from_tensor_slices(
         (
-            np.random.choice([False, True], n),
+            np.random.choice([False, True], size=(n, d)),
             # f1,
-            strings[f1],
-            # np.random.randn(n),
+            # strings[f1],
+            np.random.uniform(size=(n, d)),
         )
     )
     for term, obs in features_dataset:
@@ -32,11 +36,15 @@ def generator():
             features=tf.train.Features(
                 feature={
                     "term": tf.train.Feature(
-                        int64_list=tf.train.Int64List(value=[term])
+                        bytes_list=tf.train.BytesList(
+                            value=[tf.io.serialize_tensor(term).numpy()]
+                        )
                     ),
                     # "f1": tf.train.Feature(int64_list=tf.train.Int64List(value=[f1])),
                     "obs": tf.train.Feature(
-                        bytes_list=tf.train.BytesList(value=[obs.numpy()])
+                        bytes_list=tf.train.BytesList(
+                            value=[tf.io.serialize_tensor(obs).numpy()]
+                        )
                     ),
                     # "f3": tf.train.Feature(float_list=tf.train.FloatList(value=[f3])),
                 }
@@ -50,16 +58,21 @@ writer.write(
     tf.data.Dataset.from_generator(generator, output_types=tf.string, output_shapes=())
 )
 example_ds = tf.data.TFRecordDataset(filenames=filename)  # , compression_type="GZIP")
-FEATURE_DESCRIPTION = {
-    "term": tf.io.FixedLenFeature([], tf.int64),
-    "obs": tf.io.FixedLenSequenceFeature([], tf.string, allow_missing=True),
-}
 
 
-def parse(x):
-    return tf.io.parse_single_example(x, FEATURE_DESCRIPTION)
+episode_ds = example_ds.map(
+    lambda x: tf.io.parse_single_example(
+        x,
+        {
+            "term": tf.io.FixedLenSequenceFeature([], tf.string, allow_missing=True),
+            "obs": tf.io.FixedLenSequenceFeature([], tf.string, allow_missing=True),
+        },
+    )
+)
 
 
-episode_ds = example_ds.map(parse)
 for x in tfds.as_numpy(episode_ds):
-    print(x)
+    [term] = x["term"]
+    print(tf.io.parse_tensor(term, tf.bool))
+    [obs] = x["obs"]
+    print(tf.io.parse_tensor(obs, tf.float64))
