@@ -47,16 +47,15 @@ FEATURE_DESCRIPTION = {
     # "checkpoint_idx": tf.io.FixedLenFeature([], tf.int64),
     # "episode_idx": tf.io.FixedLenFeature([], tf.int64),
     # "episode_return": tf.io.FixedLenFeature([], tf.float32),
-    # # "clipped_episode_return": tf.io.FixedLenFeature([], tf.float32),
-    # "observations": tf.io.FixedLenSequenceFeature([], tf.string, allow_missing=True),
-    # "actions": tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True),
+    # "clipped_episode_return": tf.io.FixedLenFeature([], tf.float32),
+    "observations": tf.io.FixedLenSequenceFeature([], tf.string, allow_missing=True),
     "unclipped_rewards": tf.io.FixedLenSequenceFeature(
         [], tf.float32, allow_missing=True
     ),
-    # "clipped_rewards": tf.io.FixedLenSequenceFeature(
-    # [], tf.float32, allow_missing=True
-    # ),
-    # "discounts": tf.io.FixedLenSequenceFeature([], tf.float32, allow_missing=True),
+    "clipped_rewards": tf.io.FixedLenSequenceFeature(
+        [], tf.float32, allow_missing=True
+    ),
+    "discounts": tf.io.FixedLenSequenceFeature([], tf.float32, allow_missing=True),
 }
 FEATURES_DICT = tfds.features.FeaturesDict(
     dict(
@@ -175,6 +174,7 @@ def generate_examples_one_file(
     )
 
     for x in tfds.as_numpy(episode_ds.flat_map(tf.data.Dataset.from_tensor_slices)):
+        obs = tf.io.decode_image(x["observations"])
         assert False
     episode_ds = iter(tfds.as_numpy(episode_ds))
     while True:
