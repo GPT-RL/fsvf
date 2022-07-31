@@ -25,7 +25,7 @@ def generator():
             np.random.choice([False, True], size=(n, d)),
             # f1,
             # strings[f1],
-            np.random.uniform(size=(n, d)),
+            np.random.uniform(size=(n, 8, 8)),
         )
     )
     for term, obs in features_dataset:
