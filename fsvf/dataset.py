@@ -29,8 +29,7 @@ from dataclasses import asdict, dataclass
 
 _DESCRIPTION = """
 RL Unplugged is suite of benchmarks for offline reinforcement learning. The RL
-Unplugged is designed around the following considerations: to facilitate ease of
-use, we provide the datasets with a unified API which makes it easy for the
+Unplugged is designed around the following considerations: to facilitate ease of use, we provide the datasets with a unified API which makes it easy for the
 practitioner to work with all data in the suite once a general pipeline has been
 established.
 
@@ -41,6 +40,8 @@ to represent steps and episodes.
 
 EPISODES_PER = 8
 DISCOUNT = 0.99
+PADDING_VALUE = -1e7
+INT_PADDING_VALUE = tf.cast(PADDING_VALUE, tf.int64)
 
 
 @dataclass
@@ -233,8 +234,6 @@ def generate_examples_one_file(
     episode_ds = example_ds.map(
         tf_example_to_step_ds, num_parallel_calls=tf.data.experimental.AUTOTUNE
     )
-    PADDING_VALUE = -1e7
-    INT_PADDING_VALUE = tf.cast(PADDING_VALUE, tf.int64)
     padding_values = {
         k: tf.cast(PADDING_VALUE, v.dtype)
         for k, v in asdict(FEATURE_DESCRIPTION).items()
@@ -247,20 +246,25 @@ def generate_examples_one_file(
         return_to_go=tf.cast(PADDING_VALUE, tf.float32),
         time_step=INT_PADDING_VALUE,
     )
-    for x in tfds.as_numpy(
-        episode_ds.padded_batch(10, padding_values=padding_values, drop_remainder=True)
+
+    i = 12
+    for sequence in tfds.as_numpy(
+        episode_ds.padded_batch(i, padding_values=padding_values).flat_map(
+            lambda x: (
+                tf.data.Dataset.from_tensor_slices(x)
+                .shuffle(int(1e4))
+                .batch(
+                    10,  # TODO: drop leftovers
+                )
+            )
+        )
     ):
-        assert False, "##################################"
-        sequence = InitialFeatures(**x)
-    dataset = episode_ds.flat_map(tf.data.Dataset.from_tensor_slices)
-    for sequence_dict in tfds.as_numpy(dataset.shuffle(int(1e4)).batch(32)):
-        sequence = Features(**sequence_dict)
-        assert False
-        episode_idx = "_".join(set(sequence.episode_idx))
-        checkpoint_idx = "_".join(set(sequence.checkpoint_idx))
-        record_id = f"{checkpoint_idx}_{episode_idx}"
-        if "_" in episode_idx or "_" in checkpoint_idx:
-            assert False
+        sequence = Features(**sequence)
+        episode_idxs = set(sequence.episode_idx)
+        assert max(episode_idxs) - min(episode_idxs) <= 10
+        ep_ts = zip(sequence.episode_idx, sequence.time_step)
+        record_id = "_".join(f"{ep}.{ts}" for ep, ts in ep_ts)
+        assert len(set(sequence.checkpoint_idx))
         yield record_id, asdict(sequence)
 
 
