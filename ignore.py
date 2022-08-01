@@ -5,8 +5,11 @@ import numpy as np
 # The following functions can be used to convert a value to a type compatible
 # with tf.train.Example.
 
-t = tf.constant([1, 2, 3])
-s = tf.io.serialize_tensor(t)
+x = tf.ones((2, 84, 84, 3))
+pad = tf.zeros((5, 1, 1, 1))
+shape = x.shape
+concat = tf.pad(x, paddings=[[0, 0], [0, 0], [0, 0], [0, 5]])
+breakpoint()
 
 
 def generator():

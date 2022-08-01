@@ -47,13 +47,13 @@ DISCOUNT = 0.99
 class InitialFeatures:
     actions: Any
     checkpoint_idx: Any
-    clipped_rewards: Any
-    discounts: Any
-    episode_idx: Any
-    # episode_return: Any
-    # clipped_episode_return: Any
-    observations: Any
-    unclipped_rewards: Any
+    # clipped_rewards: Any
+    # discounts: Any
+    # episode_idx: Any
+    # # episode_return: Any
+    # # clipped_episode_return: Any
+    # observations: Any
+    # unclipped_rewards: Any
 
 
 @dataclass
@@ -69,11 +69,11 @@ class Features(InitialFeatures):
 FEATURE_DESCRIPTION = InitialFeatures(
     actions=tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True),
     checkpoint_idx=tf.io.FixedLenFeature([], tf.int64),
-    clipped_rewards=tf.io.FixedLenSequenceFeature([], tf.float32, allow_missing=True),
-    discounts=tf.io.FixedLenSequenceFeature([], tf.float32, allow_missing=True),
-    episode_idx=tf.io.FixedLenFeature([], tf.int64),
-    observations=tf.io.FixedLenSequenceFeature([], tf.string, allow_missing=True),
-    unclipped_rewards=tf.io.FixedLenSequenceFeature([], tf.float32, allow_missing=True),
+    # clipped_rewards=tf.io.FixedLenSequenceFeature([], tf.float32, allow_missing=True),
+    # discounts=tf.io.FixedLenSequenceFeature([], tf.float32, allow_missing=True),
+    # episode_idx=tf.io.FixedLenFeature([], tf.int64),
+    # observations=tf.io.FixedLenSequenceFeature([], tf.string, allow_missing=True),
+    # unclipped_rewards=tf.io.FixedLenSequenceFeature([], tf.float32, allow_missing=True),
 )
 
 
@@ -152,67 +152,73 @@ def tf_example_to_step_ds(tf_example: tf.train.Example) -> Dict[str, Any]:
     data = tf.io.parse_single_example(tf_example, asdict(FEATURE_DESCRIPTION))
     episode_length = tf.size(data["actions"])
 
-    _discounts = data["discounts"]
-    if _discounts[-1] == 0.0:
-        is_terminal = tf.concat(
-            [[False] * tf.ones(episode_length - 1, tf.int64), [True]], axis=0
-        )
-        # If the episode ends in a terminal state, in the last step only the
-        # observation has valid information (the terminal state).
-        _discounts = tf.concat([_discounts[1:], [0.0]], axis=0)
-    is_first = tf.concat([[True], [False] * tf.ones(episode_length - 1)], axis=0)
-    is_last = tf.concat([[False] * tf.ones(episode_length - 1), [True]], axis=0)
-    is_terminal = [False] * tf.ones_like(data["actions"])
-    time_step = tf.range(episode_length)
+    # is_first = tf.concat([[True], [False] * tf.ones(episode_length - 1)], axis=0)
+    # is_last = tf.concat([[False] * tf.ones(episode_length - 1), [True]], axis=0)
+    # is_terminal = [False] * tf.ones_like(data["actions"])
+    # time_step = tf.range(episode_length)
+    #
+    # _discounts = data["discounts"]
+    # if _discounts[-1] == 0.0:
+    #     is_terminal = tf.concat(
+    #         [[False] * tf.ones(episode_length - 1, tf.int64), [True]], axis=0
+    #     )
+    #     # If the episode ends in a terminal state, in the last step only the
+    #     # observation has valid information (the terminal state).
+    #     _discounts = tf.concat([_discounts[1:], [0.0]], axis=0)
+    #
+    # rewards = data["unclipped_rewards"]
+    # n1 = tf.cast(tf.math.ceil(episode_length / 2) - 1, tf.int32)
+    # n2 = episode_length // 2
+    # p1, p2 = tf.meshgrid(
+    #     tf.range(-n1, episode_length - n1),
+    #     tf.range(-n2, episode_length - n2),
+    # )
+    # powers = p1 + p2
+    # # powers = np.flip(powers, axis=0)
+    # powers = tf.reverse(powers, axis=[0])
+    # """
+    # powers:
+    # [  0  1  2 ... ]
+    # [ -1  0  1 ... ]
+    # [ -2 -1  0 ... ]
+    # ...
+    # """
+    # discounts = DISCOUNT ** tf.cast(powers, tf.float32)
+    # discounts = discounts * tf.cast(powers >= 0, tf.float32)
+    # """
+    # dicsounts:
+    # [  1.00  0.99  0.98 ... ]
+    # [  0.00  1.00  0.99 ... ]
+    # [  0.00  0.00  1.00 ... ]
+    # ...
+    # """
+    # rewards = tf.expand_dims(rewards, 0)
+    # return_to_go = tf.reduce_sum(rewards * discounts, axis=1)
 
-    rewards = data["unclipped_rewards"]
-    n1 = tf.cast(tf.math.ceil(episode_length / 2) - 1, tf.int32)
-    n2 = episode_length // 2
-    p1, p2 = tf.meshgrid(
-        tf.range(-n1, episode_length - n1),
-        tf.range(-n2, episode_length - n2),
-    )
-    powers = p1 + p2
-    # powers = np.flip(powers, axis=0)
-    powers = tf.reverse(powers, axis=[0])
-    """
-    powers:
-    [  0  1  2 ... ]
-    [ -1  0  1 ... ]
-    [ -2 -1  0 ... ]
-    ...
-    """
-    discounts = DISCOUNT ** tf.cast(powers, tf.float32)
-    discounts = discounts * tf.cast(powers >= 0, tf.float32)
-    """
-    dicsounts:
-    [  1.00  0.99  0.98 ... ]
-    [  0.00  1.00  0.99 ... ]
-    [  0.00  0.00  1.00 ... ]
-    ...
-    """
-    rewards = tf.expand_dims(rewards, 0)
-    return_to_go = tf.reduce_sum(rewards * discounts, axis=1)
-
-    # noinspection PyUnusedLocal
+    # # noinspection PyUnusedLocal
     def broadcast_idxs(
-        checkpoint_idx, episode_idx, discounts, **data
+        checkpoint_idx,
+        # episode_idx,
+        # discounts,
+        **data,
     ) -> Dict[str, Any]:
         return dict(
             **data,
-            checkpoint_idx=[checkpoint_idx] * tf.ones(episode_length),
-            discounts=_discounts,
-            episode_idx=[episode_idx] * tf.ones(episode_length),
-            return_to_go=return_to_go,
+            checkpoint_idx=[checkpoint_idx] * tf.ones(episode_length, tf.int64),
+            # discounts=_discounts,
+            # episode_idx=[episode_idx] * tf.ones(episode_length, tf.int64),
+            # return_to_go=return_to_go,
         )
 
-    return broadcast_idxs(
+    broadcasted = broadcast_idxs(
         **data,
-        is_first=is_first,
-        is_last=is_last,
-        is_terminal=is_terminal,
-        time_step=time_step,
+        # is_first=is_first,
+        # is_last=is_last,
+        # is_terminal=is_terminal,
+        # time_step=time_step,
     )
+
+    return broadcasted
 
 
 def generate_examples_one_file(
@@ -225,8 +231,13 @@ def generate_examples_one_file(
     episode_ds = example_ds.map(
         tf_example_to_step_ds, num_parallel_calls=tf.data.experimental.AUTOTUNE
     )
+    padding_values = {
+        k: tf.cast(-1e7, v.dtype) for k, v in asdict(FEATURE_DESCRIPTION).items()
+    }
+    for x in tfds.as_numpy(episode_ds.padded_batch(10, padding_values=padding_values)):
+        sequence = InitialFeatures(**x)
+        assert False
     dataset = episode_ds.flat_map(tf.data.Dataset.from_tensor_slices)
-
     for sequence_dict in tfds.as_numpy(dataset.shuffle(int(1e4)).batch(32)):
         sequence = Features(**sequence_dict)
         assert False
