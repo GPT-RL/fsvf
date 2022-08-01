@@ -52,7 +52,7 @@ class InitialFeatures:
     episode_idx: Any
     # # episode_return: Any
     # # clipped_episode_return: Any
-    # observations: Any
+    observations: Any
     unclipped_rewards: Any
 
 
@@ -72,7 +72,7 @@ FEATURE_DESCRIPTION = InitialFeatures(
     clipped_rewards=tf.io.FixedLenSequenceFeature([], tf.float32, allow_missing=True),
     discounts=tf.io.FixedLenSequenceFeature([], tf.float32, allow_missing=True),
     episode_idx=tf.io.FixedLenFeature([], tf.int64),
-    # observations=tf.io.FixedLenSequenceFeature([], tf.string, allow_missing=True),
+    observations=tf.io.FixedLenSequenceFeature([], tf.string, allow_missing=True),
     unclipped_rewards=tf.io.FixedLenSequenceFeature([], tf.float32, allow_missing=True),
 )
 
@@ -220,7 +220,6 @@ def tf_example_to_step_ds(tf_example: tf.train.Example) -> Dict[str, Any]:
         is_terminal=is_terminal,
         time_step=time_step,
     )
-
     return broadcasted
 
 
@@ -236,15 +235,16 @@ def generate_examples_one_file(
     )
     PADDING_VALUE = -1e7
     INT_PADDING_VALUE = tf.cast(PADDING_VALUE, tf.int64)
-    padding_values = dict(
-        **{
-            k: tf.cast(PADDING_VALUE, v.dtype)
-            for k, v in asdict(FEATURE_DESCRIPTION).items()
-        },
-        return_to_go=tf.cast(PADDING_VALUE, tf.float32),
+    padding_values = {
+        k: tf.cast(PADDING_VALUE, v.dtype)
+        for k, v in asdict(FEATURE_DESCRIPTION).items()
+        if k != "observations"
+    } | dict(
         is_first=INT_PADDING_VALUE,
         is_last=INT_PADDING_VALUE,
         is_terminal=INT_PADDING_VALUE,
+        observations=tf.constant("<PAD>"),
+        return_to_go=tf.cast(PADDING_VALUE, tf.float32),
         time_step=INT_PADDING_VALUE,
     )
     for x in tfds.as_numpy(
