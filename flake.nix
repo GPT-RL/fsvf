@@ -49,7 +49,16 @@
       all = p: runtime p ++ dev p;
     in {
       devShell = pkgs.mkShell {
-        buildInputs = [pkgs.pre-commit] ++ all python.pkgs;
+        venvDir = ".venv";
+        buildInputs =
+          [
+            python.pkgs.vemvShellHook
+            pkgs.pre-commit
+          ]
+          ++ all python.pkgs;
+        postShellHook = ''
+          ln -sf ${python-env}/lib/python3.9/site-packages/* ${venvDir}/lib/python3.9/site-packages
+        '';
         shellHook = ''
           export pythonbreakpoint=ipdb.set_trace
         '';

@@ -15,17 +15,14 @@
 
 """RLU Atari datasets."""
 
-import math
 import os
-import time
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, Generator, List, Tuple
 
-import numpy as np
 import tensorflow as tf
 import tensorflow_datasets.public_api as tfds
 from tensorflow_datasets.rl_unplugged import atari_utils
-from dataclasses import asdict, dataclass
 
 _DESCRIPTION = """
 RL Unplugged is suite of benchmarks for offline reinforcement learning. The RL
@@ -234,31 +231,14 @@ def generate_examples_one_file(
     episode_ds = example_ds.map(
         tf_example_to_step_ds, num_parallel_calls=tf.data.experimental.AUTOTUNE
     )
-    padding_values = {
-        k: tf.cast(PADDING_VALUE, v.dtype)
-        for k, v in asdict(FEATURE_DESCRIPTION).items()
-        if k != "observations"
-    } | dict(
-        is_first=INT_PADDING_VALUE,
-        is_last=INT_PADDING_VALUE,
-        is_terminal=INT_PADDING_VALUE,
-        observations=tf.constant("<PAD>"),
-        return_to_go=tf.cast(PADDING_VALUE, tf.float32),
-        time_step=INT_PADDING_VALUE,
-    )
-
-    i = 12
+    def f(x):
+        y = tf.data.Dataset.from_tensor_slices(x)
+        y.shuffle(256)
+        assert False
     for sequence in tfds.as_numpy(
-        episode_ds.padded_batch(i, padding_values=padding_values).flat_map(
-            lambda x: (
-                tf.data.Dataset.from_tensor_slices(x)
-                .shuffle(int(1e4))
-                .batch(
-                    10,  # TODO: drop leftovers
-                )
-            )
-        )
+        episode_ds.flat_map(tf.data.Dataset.from_tensor_slices).batch(256).flat_map(f)
     ):
+        assert False
         sequence = Features(**sequence)
         episode_idxs = set(sequence.episode_idx)
         assert max(episode_idxs) - min(episode_idxs) <= 10
