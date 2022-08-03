@@ -42,24 +42,27 @@ INT_PADDING_VALUE = tf.cast(PADDING_VALUE, tf.int64)
 
 
 @dataclass
-class InitialFeatures:
+class BaseFeatures:
     actions: Any
     checkpoint_idx: Any
+    episode_idx: Any
+    observations: Any
+
+
+@dataclass
+class InitialFeatures(BaseFeatures):
     clipped_rewards: Any
     discounts: Any
-    episode_idx: Any
-    # # episode_return: Any
-    # # clipped_episode_return: Any
-    observations: Any
     unclipped_rewards: Any
 
 
 @dataclass
-class Features(InitialFeatures):
+class Features(BaseFeatures):
     is_first: Any
     is_last: Any
     is_terminal: Any
     return_to_go: Any
+    rewards: Any
     time_step: Any
 
 
@@ -75,48 +78,34 @@ FEATURE_DESCRIPTION = InitialFeatures(
 )
 
 
-FEATURES_DICT = tfds.features.FeaturesDict(  # TODO!
-    # dict(
-    # checkpoint_id=tf.int64,
-    # episodes=tfds.features.Dataset(
-    #     dict(
-    #         steps=tfds.features.Dataset(
-    #             dict(
-    dict(
-        # Features(
-        observations=tfds.features.Image(
-            shape=(
-                84,
-                84,
-                1,
+FEATURES_DICT = tfds.features.FeaturesDict(
+    asdict(
+        Features(
+            actions=tf.int64,
+            checkpoint_idx=tf.int64,
+            episode_idx=tf.int64,
+            is_terminal=tf.bool,
+            is_first=tf.bool,
+            is_last=tf.bool,
+            observations=tfds.features.Image(
+                shape=(
+                    84,
+                    84,
+                    1,
+                ),
+                dtype=tf.uint8,
+                encoding_format="png",
             ),
-            dtype=tf.uint8,
-            encoding_format="png",
-        ),
-        actions=tf.int64,
-        return_to_go=tfds.features.Scalar(
-            dtype=tf.float32,
-            doc=tfds.features.Documentation(desc="Discounted sum of future rewards."),
-        ),
-        rewards=tfds.features.Scalar(
-            dtype=tf.float32,
-            doc=tfds.features.Documentation(
-                desc="Clipped reward.", value_range="[-1, 1]"
+            return_to_go=tfds.features.Scalar(
+                dtype=tf.float32,
+                doc=tfds.features.Documentation(
+                    desc="Discounted sum of future rewards."
+                ),
             ),
-        ),
-        is_terminals=tf.bool,
-        is_first=tf.bool,
-        is_last=tf.bool,
-        # )
+            rewards=tfds.features.Scalar(dtype=tf.float32),
+            time_step=tf.int64,
+        )
     )
-    # ),
-    #         episode_id=tf.int64,
-    #         episode_return=tfds.features.Scalar(
-    #             dtype=tf.float32,
-    #             doc=tfds.features.Documentation(desc="Sum of the clipped rewards."),
-    #          ),
-    #     )
-    # ),
 )
 
 
@@ -199,26 +188,27 @@ def tf_example_to_step_ds(tf_example: tf.train.Example) -> Dict[str, Any]:
     # noinspection PyUnusedLocal
     def broadcast_idxs(
         checkpoint_idx,
+        clipped_rewards,
         episode_idx,
         discounts,
+        unclipped_rewards,
         **data,
-    ) -> Dict[str, Any]:
-        return dict(
+    ) -> Features:
+        return Features(
             **data,
             checkpoint_idx=[checkpoint_idx] * tf.ones(episode_length, tf.int64),
-            discounts=_discounts,
             episode_idx=[episode_idx] * tf.ones(episode_length, tf.int64),
+            rewards=unclipped_rewards,
             return_to_go=return_to_go,
         )
 
-    broadcasted = broadcast_idxs(
+    return asdict(broadcast_idxs(
         **data,
         is_first=is_first,
         is_last=is_last,
         is_terminal=is_terminal,
         time_step=time_step,
-    )
-    return broadcasted
+    ))
 
 
 def generate_examples_one_file(
