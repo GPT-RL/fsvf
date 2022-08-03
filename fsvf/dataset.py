@@ -231,20 +231,16 @@ def generate_examples_one_file(
     episode_ds = example_ds.map(
         tf_example_to_step_ds, num_parallel_calls=tf.data.experimental.AUTOTUNE
     )
-    def f(x):
-        y = tf.data.Dataset.from_tensor_slices(x)
-        y.shuffle(256)
-        assert False
+
     for sequence in tfds.as_numpy(
-        episode_ds.flat_map(tf.data.Dataset.from_tensor_slices).batch(256).flat_map(f)
+        episode_ds.flat_map(tf.data.Dataset.from_tensor_slices)
+        .batch(256)
+        .flat_map(lambda x: tf.data.Dataset.from_tensor_slices(x).shuffle(256))
+        .batch(32)
     ):
-        assert False
         sequence = Features(**sequence)
-        episode_idxs = set(sequence.episode_idx)
-        assert max(episode_idxs) - min(episode_idxs) <= 10
-        ep_ts = zip(sequence.episode_idx, sequence.time_step)
-        record_id = "_".join(f"{ep}.{ts}" for ep, ts in ep_ts)
-        assert len(set(sequence.checkpoint_idx))
+        episode, time_step = min(zip(sequence.episode_idx, sequence.time_step))
+        record_id = f"{episode}_{time_step}"
         yield record_id, asdict(sequence)
 
 
